@@ -1,19 +1,10 @@
 "use client"
 
-import React, { useState, useCallback } from "react"
+import type React from "react"
+import { useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
-import {
-  FileVideo,
-  FileText,
-  FileType,
-  Upload,
-  X,
-  Sparkles,
-  Wand2,
-  Trash2,
-  Loader2,
-} from "lucide-react"
+import { FileVideo, FileText, FileType, Upload, X, Wand2, Trash2, Loader2 } from "lucide-react"
 
 // ===== Types =====
 interface EncodedFile {
@@ -163,21 +154,18 @@ export default function Page() {
 
   // ---- UI ----
   return (
-    <main className="min-h-screen bg-[#1a1a3e] p-6 md:p-12 text-white">
+    <main className="min-h-screen bg-[#1a1a3e] p-6 md:p-12 text-white font-sans">
       <div className="mx-auto max-w-5xl">
         <div className="mb-10 text-center">
-          <div className="mb-4 inline-flex items-center justify-center rounded-full bg-[#ff6b6b]/20 p-3">
-            <Sparkles className="h-6 w-6 text-[#ff6b6b]" />
-          </div>
           <motion.h1
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="mb-3 font-sans text-4xl font-bold text-white"
+            className="mb-3 text-4xl font-bold uppercase tracking-wide text-white"
           >
-            SOP Generator
+            AIMA
           </motion.h1>
-          <p className="text-lg text-[#8a8aa8]">
+          <p className="text-lg font-medium text-[#8a8aa8]">
             Upload your content or paste a transcript to generate a Standard Operating Procedure
           </p>
         </div>
@@ -206,8 +194,8 @@ export default function Page() {
               <Upload className="h-10 w-10 text-[#ff6b6b]" />
             </div>
             <div>
-              <p className="mb-2 text-xl font-semibold text-white">Drop your files here or click to browse</p>
-              <p className="text-sm text-[#8a8aa8]">
+              <p className="mb-2 text-xl font-bold text-white">Drop your files here or click to browse</p>
+              <p className="text-sm font-medium text-[#8a8aa8]">
                 Supports: Video (MP4, MOV, AVI), PDF, Word (DOC, DOCX)
               </p>
             </div>
@@ -216,20 +204,20 @@ export default function Page() {
 
         {/* Transcript Input */}
         <div className="mb-6 rounded-xl border-2 border-[#2d2d52] bg-[#252547] p-8 shadow-xl">
-          <h2 className="mb-2 text-xl font-semibold text-white">Paste transcript / notes</h2>
-          <p className="text-sm text-[#8a8aa8] mb-4">Already have a transcript? Paste it here</p>
+          <h2 className="mb-2 text-xl font-bold text-white">Paste transcript / notes</h2>
+          <p className="text-sm font-medium text-[#8a8aa8] mb-4">Already have a transcript? Paste it here</p>
           <textarea
             placeholder="Paste your transcript or rough notes here..."
             value={transcript}
             onChange={(e) => setTranscript(e.target.value)}
-            className="w-full min-h-[200px] resize-none rounded-lg border-2 border-[#2d2d52] bg-[#2d2d52] p-3 text-base text-white placeholder:text-[#8a8aa8] focus-visible:border-[#ff6b6b] focus:outline-none"
+            className="w-full min-h-[200px] resize-none rounded-lg border-2 border-[#2d2d52] bg-[#2d2d52] p-3 text-base font-medium text-white placeholder:text-[#8a8aa8] focus-visible:border-[#ff6b6b] focus:outline-none"
           />
         </div>
 
         {/* Uploaded Files List */}
         {files.length > 0 && (
           <div className="mb-6 rounded-xl border-2 border-[#2d2d52] bg-[#252547] p-6 shadow-xl">
-            <h2 className="mb-4 text-lg font-semibold text-white">Uploaded Files ({files.length})</h2>
+            <h2 className="mb-4 text-lg font-bold text-white">Uploaded Files ({files.length})</h2>
             <div className="space-y-3">
               {files.map((file) => (
                 <div
@@ -239,8 +227,8 @@ export default function Page() {
                   <div className="flex items-center gap-3">
                     <div className="rounded-lg bg-[#ff6b6b]/20 p-2 text-[#ff6b6b]">{getFileIcon(file.type)}</div>
                     <div>
-                      <p className="font-medium text-white">{file.name}</p>
-                      <p className="text-sm text-[#8a8aa8]">{formatFileSize(file.size)}</p>
+                      <p className="font-bold text-white">{file.name}</p>
+                      <p className="text-sm font-medium text-[#8a8aa8]">{formatFileSize(file.size)}</p>
                     </div>
                   </div>
                   <button
@@ -260,21 +248,21 @@ export default function Page() {
           <button
             onClick={resetAll}
             disabled={files.length === 0 && !transcript}
-            className="flex-1 flex items-center justify-center gap-2 rounded-lg border-2 border-[#2d2d52] bg-transparent py-3 text-base font-semibold text-white hover:bg-[#2d2d52] hover:text-[#ff6b6b] disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 rounded-lg border-2 border-[#2d2d52] bg-transparent py-3 text-base font-bold text-white hover:bg-[#2d2d52] hover:text-[#ff6b6b] disabled:opacity-50"
           >
             <Trash2 className="h-5 w-5" /> Reset
           </button>
           <button
             onClick={callBackend}
             disabled={loading || (files.length === 0 && !transcript)}
-            className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-[#ff6b6b] py-3 text-base font-semibold text-white shadow-lg hover:bg-[#e45a5a] disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-[#ff6b6b] py-3 text-base font-bold text-white shadow-lg hover:bg-[#e45a5a] disabled:opacity-50"
           >
             {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Wand2 className="h-5 w-5" />}
             {loading ? "Generating…" : "Generate"}
           </button>
         </div>
 
-        {errorMsg && <div className="text-sm text-red-400 mt-4">{errorMsg}</div>}
+        {errorMsg && <div className="text-sm font-medium text-red-400 mt-4">{errorMsg}</div>}
       </div>
     </main>
   )
