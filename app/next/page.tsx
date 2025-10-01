@@ -1,33 +1,45 @@
-"use client";
-import React from "react";
-import { useEffect, useState } from "react";
+"use client"
+
+import React, { useEffect, useState } from "react"
 
 const NextPage: React.FC = () => {
-  const [sopJson, setSopJson] = useState<any | null>(null);
+  const [sopJson, setSopJson] = useState<any | null>(null)
 
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem("sop_result_json");
+      const raw = sessionStorage.getItem("sop_result_json")
       if (raw) {
-        setSopJson(JSON.parse(raw));
+        setSopJson(JSON.parse(raw))
       }
-    } catch (e) {
+    } catch {
       // ignore parse errors
     }
-  }, []);
+  }, [])
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-slate-50 text-slate-900">
-      <div className="max-w-4xl mx-auto px-4 py-10">
-        <h1 className="text-2xl font-bold mb-4">SOP — Next Step</h1>
+    <main className="flex min-h-screen items-center justify-center bg-[#1a1a3e] p-6 text-white">
+      <div className="w-full max-w-4xl text-center">
+        <h1 className="mb-3 font-sans text-4xl font-bold text-white">
+          SOP — Next Step
+        </h1>
+        <p className="text-[#8a8aa8] mb-6">
+          Your Standard Operating Procedure has been generated successfully.
+        </p>
+
         {sopJson ? (
-          <pre className="whitespace-pre-wrap text-sm leading-6 p-4 bg-slate-50 rounded-xl border border-slate-200">{JSON.stringify(sopJson, null, 2)}</pre>
+          <div className="rounded-xl border-2 border-[#2d2d52] bg-[#252547] p-6 text-left shadow-xl">
+            <pre className="whitespace-pre-wrap text-sm leading-6 text-white">
+              {JSON.stringify(sopJson, null, 2)}
+            </pre>
+          </div>
         ) : (
-          <div className="text-slate-500">No SOP found. Go back and generate one first.</div>
+          <div className="text-[#8a8aa8]">
+            No SOP found. Go back and generate one first.
+          </div>
         )}
       </div>
-    </div>
-  );
-};
+    </main>
+  )
+}
 
-export default NextPage;
+export default NextPage
