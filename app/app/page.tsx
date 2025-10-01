@@ -1,5 +1,6 @@
 "use client"
 import React, { useCallback, useState, ChangeEvent } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Upload, FileText, Video, Wand2, Clipboard, Trash2, Link as LinkIcon, Loader2 } from "lucide-react";
 import OpenAI from "openai";
@@ -68,6 +69,7 @@ const acceptPdf = "application/pdf,.pdf";
 const API_KEY = "";
 
 const App: React.FC = () => {
+  const router = useRouter();
   // ---- Source state ----
   const [pdfFile, setPdfFile] = useState<File | null>(null); // forwarded to backend only
   const [videoFile, setVideoFile] = useState<File | null>(null); // forwarded to backend only
@@ -146,40 +148,40 @@ const App: React.FC = () => {
 
 
   // types shared with backend (or duplicate them server-side)
-type EncodedFile = { filename: string; dataUrl: string; mime: string };
-type GeneratePayload = {
-  model?: string;
-  input: {
-    pdf: EncodedFile | null;
-    video: EncodedFile | null;
-    transcriptText: string | null;
+  type EncodedFile = { filename: string; dataUrl: string; mime: string };
+  type GeneratePayload = {
+    model?: string;
+    input: {
+      pdf: EncodedFile | null;
+      video: EncodedFile | null;
+      transcriptText: string | null;
+    };
   };
-};
 
 
-const callBackend = useCallback(async (): Promise<void> => {
-  setLoading(true);
-  setErrorMsg("");
-  try {
-    const body = await buildRequestBody();
+  const callBackend = useCallback(async (): Promise<void> => {
+    setLoading(true);
+    setErrorMsg("");
+    try {
+      const body = await buildRequestBody();
 
-    // Point this at your API route (below)
-    const res = await fetch("/api/generate-sop", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+      // Point this at your API route (below)
+      const res = await fetch("/api/generate-sop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
 
-    const data = await res.json(); // pure SOP JSON from the backend
-    setResultJson(data as any);
-  } catch (e: unknown) {
-    console.error(e);
-    setErrorMsg(e instanceof Error ? e.message : "Something went wrong calling the backend");
-  } finally {
-    setLoading(false);
-  }
-}, [model, pdfFile, videoFile, transcriptText]);
+      const data = await res.json(); // pure SOP JSON from the backend
+      setResultJson(data as any);
+    } catch (e: unknown) {
+      console.error(e);
+      setErrorMsg(e instanceof Error ? e.message : "Something went wrong calling the backend");
+    } finally {
+      setLoading(false);
+    }
+  }, [model, pdfFile, videoFile, transcriptText]);
 
 
   return (
@@ -273,26 +275,19 @@ const callBackend = useCallback(async (): Promise<void> => {
             <CardFooter>
               <div className="flex gap-2">
                 <Tooltip content="Copy JSON">
-                {/*<Button isDisabled={!resultJson} variant="flat" onPress={() => void copyJson()} startContent={<Clipboard size={16} />}>Copy</Button>*/}
+                  {/*<Button isDisabled={!resultJson} variant="flat" onPress={() => void copyJson()} startContent={<Clipboard size={16} />}>Copy</Button>*/}
                 </Tooltip>
-                <Tooltip content="Download as .json">
+
+                {/*Change this to next so when the file has been processed we can move to the next step*/}
+
+                <Tooltip content="Proceed to next page">
                   <Button
-                    isDisabled={!resultJson}
                     variant="flat"
                     onPress={() => {
-                      if (!resultJson) return;
-                      const blob = new Blob([JSON.stringify(resultJson, null, 2)], { type: "application/json;charset=utf-8" });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = "sop.json";
-                      document.body.appendChild(a);
-                      a.click();
-                      a.remove();
-                      URL.revokeObjectURL(url);
+                      router.push("/next");
                     }}
                   >
-                    Download
+                    Next
                   </Button>
                 </Tooltip>
               </div>
