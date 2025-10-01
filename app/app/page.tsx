@@ -1,306 +1,281 @@
 "use client"
-import React, { useCallback, useState, ChangeEvent } from "react";
-import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { Upload, FileText, Video, Wand2, Clipboard, Trash2, Link as LinkIcon, Loader2 } from "lucide-react";
-import OpenAI from "openai";
 
-// --- HeroUI components ---
+import React, { useState, useCallback } from "react"
+import { useRouter } from "next/navigation"
+import { motion } from "framer-motion"
 import {
-  Button,
-  Card,
-  CardHeader,
-  CardBody,
-  CardFooter,
-  Input,
-  Textarea,
-  Switch,
-  Divider,
-  Tooltip,
-} from "@heroui/react";
-import { SOP_PROMPT } from "./prompt";
+  FileVideo,
+  FileText,
+  FileType,
+  Upload,
+  X,
+  Sparkles,
+  Wand2,
+  Trash2,
+  Loader2,
+} from "lucide-react"
 
 // ===== Types =====
-interface SOPJson {
-  version: string;
-  effectiveDate: string; // YYYY-MM-DD
-  source?: string;
-  prerequisites?: string[];
-  steps: string[];
-  notes?: string;
-}
-
 interface EncodedFile {
-  filename: string;
-  dataUrl: string; // data:*/*;base64,
-  mime: string;
+  filename: string
+  dataUrl: string
+  mime: string
 }
 
 interface GeneratePayload {
-  model?: string;
+  model?: string
   input: {
-    pdf: EncodedFile | null;
-    video: EncodedFile | null;
-    transcriptText: string | null;
-  };
-  options?: {
-    output: "json";
-    schema: unknown; // keep generic so you can swap validators
-  };
-  system?: string;
+    pdf: EncodedFile | null
+    video: EncodedFile | null
+    transcriptText: string | null
+  }
 }
 
-// Simple JSON schema you can refine on the server
-const SOP_SCHEMA: unknown = {
-  type: "object",
-  properties: {
-    version: { type: "string" },
-    effectiveDate: { type: "string" },
-    source: { type: "string" },
-    prerequisites: { type: "array", items: { type: "string" } },
-    steps: { type: "array", items: { type: "string" } },
-    notes: { type: "string" },
-  },
-  required: ["version", "effectiveDate", "steps"],
-};
+export default function Page() {
+  const router = useRouter()
 
-const acceptTranscript = "text/plain,.txt,.vtt,.srt,.md,application/json";
-const acceptPdf = "application/pdf,.pdf";
-const API_KEY = "";
+  const [files, setFiles] = useState<File[]>([])
+  const [isDragging, setIsDragging] = useState(false)
+  const [transcript, setTranscript] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string>("")
 
-const App: React.FC = () => {
-  const router = useRouter();
-  // ---- Source state ----
-  const [pdfFile, setPdfFile] = useState<File | null>(null); // forwarded to backend only
-  const [videoFile, setVideoFile] = useState<File | null>(null); // forwarded to backend only
-  const [transcriptFile, setTranscriptFile] = useState<File | null>(null);
-  const [transcriptText, setTranscriptText] = useState<string>("");
+  const acceptedTypes = [
+    "video/mp4",
+    "video/quicktime",
+    "video/x-msvideo",
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ]
 
-  // ---- LLM call config ----
-  const [endpointUrl, setEndpointUrl] = useState<string>("/api/generate-sop");
-  const [model, setModel] = useState<string>("gpt-4o-mini");
-  const [mockLocally, setMockLocally] = useState<boolean>(true);
-  const [loading, setLoading] = useState<boolean>(false);
+  // ---- Drag + Drop ----
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }, [])
 
-  // ---- Output ----
-  const [resultJson, setResultJson] = useState<SOPJson | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string>("");
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }, [])
 
-  const resetAll = (): void => {
-    setPdfFile(null);
-    setVideoFile(null);
-    setTranscriptFile(null);
-    setTranscriptText("");
-    setResultJson(null);
-    setErrorMsg("");
-  };
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    const droppedFiles = Array.from(e.dataTransfer.files)
+    processFiles(droppedFiles)
+  }, [])
 
-  const onPdfChange = (e: ChangeEvent<HTMLInputElement>): void => {
-    const f = e.target.files?.[0] || null;
-    setPdfFile(f);
-  };
-
-  const onVideoChange = (e: ChangeEvent<HTMLInputElement>): void => {
-    const f = e.target.files?.[0] || null;
-    setVideoFile(f);
-  };
-
-  const onTranscriptFile = async (file: File): Promise<void> => {
-    setTranscriptFile(file);
-    try {
-      const text = await file.text();
-      setTranscriptText((prev) => (prev ? prev + "\n\n" : "") + text);
-    } catch (e) {
-      console.error(e);
-      setErrorMsg("Couldn't read transcript file.");
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const selectedFiles = Array.from(e.target.files)
+      processFiles(selectedFiles)
     }
-  };
+  }, [])
 
-  // ---- Minimal local mock to unblock UI before wiring backend ----
+  const processFiles = (fileList: File[]) => {
+    const validFiles = fileList.filter((file) => acceptedTypes.includes(file.type))
+    setFiles((prev) => [...prev, ...validFiles])
+  }
 
+  const removeFile = (name: string) => {
+    setFiles((prev) => prev.filter((file) => file.name !== name))
+  }
 
-  // ---- helpers ----
+  const resetAll = () => {
+    setFiles([])
+    setTranscript("")
+    setErrorMsg("")
+  }
+
+  // ---- Helpers ----
   const fileToDataUrl = (file: File): Promise<string> =>
     new Promise<string>((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve((r.result || "").toString());
-      r.onerror = () => reject(new Error("Failed to read file"));
-      r.readAsDataURL(file);
-    });
+      const r = new FileReader()
+      r.onload = () => resolve((r.result || "").toString())
+      r.onerror = () => reject(new Error("Failed to read file"))
+      r.readAsDataURL(file)
+    })
 
-  // ---- Build request payload for your backend/LLM ----
+  // ---- Build Request ----
   const buildRequestBody = async (): Promise<GeneratePayload> => {
-    const payload: GeneratePayload = {
-      model,
-      input: {
-        pdf: pdfFile
-          ? { filename: pdfFile.name, dataUrl: await fileToDataUrl(pdfFile), mime: pdfFile.type || "application/pdf" }
-          : null,
-        video: videoFile
-          ? { filename: videoFile.name, dataUrl: await fileToDataUrl(videoFile), mime: videoFile.type || "video/*" }
-          : null,
-        transcriptText: transcriptText || null,
+    let pdf: EncodedFile | null = null
+    let video: EncodedFile | null = null
+
+    for (const f of files) {
+      if (f.type === "application/pdf") {
+        pdf = { filename: f.name, dataUrl: await fileToDataUrl(f), mime: f.type }
       }
-    };
+      if (f.type.startsWith("video/")) {
+        video = { filename: f.name, dataUrl: await fileToDataUrl(f), mime: f.type }
+      }
+    }
 
-    return payload;
-  };
+    return {
+      model: "gpt-4o-mini",
+      input: {
+        pdf,
+        video,
+        transcriptText: transcript || null,
+      },
+    }
+  }
 
-
-  // types shared with backend (or duplicate them server-side)
-  type EncodedFile = { filename: string; dataUrl: string; mime: string };
-  type GeneratePayload = {
-    model?: string;
-    input: {
-      pdf: EncodedFile | null;
-      video: EncodedFile | null;
-      transcriptText: string | null;
-    };
-  };
-
-
-  const callBackend = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setErrorMsg("");
+  // ---- Call Backend ----
+  const callBackend = useCallback(async () => {
+    setLoading(true)
+    setErrorMsg("")
     try {
-      const body = await buildRequestBody();
-
-      // Point this at your API route (below)
+      const body = await buildRequestBody()
       const res = await fetch("/api/generate-sop", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+      })
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`)
+      const data = await res.json()
 
-      const data = await res.json(); // pure SOP JSON from the backend
-      setResultJson(data as any);
+      // Save to session for next page
+      sessionStorage.setItem("sop_result_json", JSON.stringify(data))
+      router.push("/next")
     } catch (e: unknown) {
-      console.error(e);
-      setErrorMsg(e instanceof Error ? e.message : "Something went wrong calling the backend");
+      console.error(e)
+      setErrorMsg(e instanceof Error ? e.message : "Something went wrong")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [model, pdfFile, videoFile, transcriptText]);
+  }, [files, transcript, router])
 
+  const getFileIcon = (type: string) => {
+    if (type.startsWith("video/")) return <FileVideo className="h-5 w-5" />
+    if (type === "application/pdf") return <FileText className="h-5 w-5" />
+    return <FileType className="h-5 w-5" />
+  }
 
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes"
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+  }
+
+  // ---- UI ----
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900">
-      <div className="max-w-6xl mx-auto px-4 py-10">
-        <header className="mb-8">
+    <main className="min-h-screen bg-[#1a1a3e] p-6 md:p-12 text-white">
+      <div className="mx-auto max-w-5xl">
+        <div className="mb-10 text-center">
+          <div className="mb-4 inline-flex items-center justify-center rounded-full bg-[#ff6b6b]/20 p-3">
+            <Sparkles className="h-6 w-6 text-[#ff6b6b]" />
+          </div>
           <motion.h1
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="text-3xl md:text-4xl font-bold tracking-tight"
+            className="mb-3 font-sans text-4xl font-bold text-white"
           >
             SOP Generator
           </motion.h1>
-          <p className="text-slate-600 mt-2">Upload your files and get a Standard Operating Procedure</p>
-        </header>
-
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Source */}
-          <Card shadow="sm" className="border border-slate-200">
-            <CardHeader className="flex flex-col gap-1">
-              <div className="text-lg font-semibold">Source</div>
-              <div className="text-sm text-slate-500">Upload a PDF / Video and/or paste a transcript.</div>
-            </CardHeader>
-            <Divider />
-            <CardBody className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">PDF (optional)</label>
-                <Input type="file" accept={acceptPdf} onChange={onPdfChange} startContent={<Upload size={16} />} />
-                {pdfFile && <div className="text-xs text-slate-500">Selected: {pdfFile.name}</div>}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Video (optional)</label>
-                <Input type="file" accept="video/*" onChange={onVideoChange} startContent={<Video size={16} />} />
-                {videoFile && <div className="text-xs text-slate-500">Selected: {videoFile.name}</div>}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Transcript / Notes file</label>
-                <Input
-                  type="file"
-                  accept={acceptTranscript}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                    const f = e.target.files?.[0];
-                    if (f) void onTranscriptFile(f);
-                  }}
-                  startContent={<FileText size={16} />}
-                />
-                {transcriptFile && <div className="text-xs text-slate-500">Added: {transcriptFile.name}</div>}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Or paste transcript / notes</label>
-                <Textarea
-                  minRows={8}
-                  value={transcriptText}
-                  onChange={(e) => setTranscriptText(e.target.value)}
-                  placeholder="Paste transcript or rough notes here..."
-                />
-              </div>
-
-              <Divider />
-
-              <div className="flex items-center justify-between">
-                <div className="flex gap-2">
-                  <Button color="default" variant="flat" onPress={resetAll} startContent={<Trash2 size={16} />}>Reset</Button>
-                  <Button color="primary" onPress={() => void callBackend()} startContent={<Wand2 size={16} />}>{loading ? "Generating…" : "Generate"}</Button>
-                </div>
-              </div>
-            </CardBody>
-          </Card>
-
-          {/* Output */}
-          <Card shadow="sm" className="border border-slate-200">
-            <CardHeader className="flex items-center justify-between">
-              <div className="text-lg font-semibold flex items-center gap-2"><FileText size={18} /> Output</div>
-              <div className="text-xs text-slate-500">LLM returns JSON (schema-friendly)</div>
-            </CardHeader>
-            <Divider />
-            <CardBody>
-              {loading ? (
-                <div className="flex items-center gap-2 text-slate-600 text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Working…</div>
-              ) : resultJson ? (
-                <pre className="whitespace-pre-wrap text-sm leading-6 p-3 bg-slate-50 rounded-xl border border-slate-200 min-h-[220px]">{JSON.stringify(resultJson, null, 2)}</pre>
-              ) : (
-                <div className="text-sm text-slate-500">No result yet. Add a source and click Generate.</div>
-              )}
-              {errorMsg && <div className="text-sm text-red-600 mt-2">{errorMsg}</div>}
-            </CardBody>
-            <CardFooter>
-              <div className="flex gap-2">
-                <Tooltip content="Copy JSON">
-                  {/*<Button isDisabled={!resultJson} variant="flat" onPress={() => void copyJson()} startContent={<Clipboard size={16} />}>Copy</Button>*/}
-                </Tooltip>
-
-                {/*Change this to next so when the file has been processed we can move to the next step*/}
-
-                <Tooltip content="Proceed to next page">
-                  <Button
-                    variant="flat"
-                    onPress={() => {
-                      router.push("/next");
-                    }}
-                  >
-                    Next
-                  </Button>
-                </Tooltip>
-              </div>
-            </CardFooter>
-          </Card>
+          <p className="text-lg text-[#8a8aa8]">
+            Upload your content or paste a transcript to generate a Standard Operating Procedure
+          </p>
         </div>
 
-        <p className="text-xs text-slate-500 mt-6">
-          Tip: your backend can transcribe video and extract PDF text server-side, then feed the cleaned text to the LLM. Keep the schema stable so it’s easy to store and diff SOPs.
-        </p>
-      </div>
-    </div>
-  );
-};
+        {/* Upload Area */}
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`mb-6 rounded-xl border-2 border-dashed p-16 text-center transition-all duration-300 ${
+            isDragging
+              ? "scale-[1.02] border-[#ff6b6b] bg-[#2d2d52]"
+              : "border-[#2d2d52] bg-[#252547] hover:border-[#ff6b6b]/50 hover:bg-[#2d2d52]"
+          }`}
+        >
+          <input
+            type="file"
+            id="file-upload"
+            className="hidden"
+            multiple
+            accept=".mp4,.mov,.avi,.pdf,.doc,.docx"
+            onChange={handleFileInput}
+          />
+          <label htmlFor="file-upload" className="flex cursor-pointer flex-col items-center gap-4">
+            <div className="rounded-2xl bg-[#ff6b6b]/20 p-5 transition-transform group-hover:scale-110">
+              <Upload className="h-10 w-10 text-[#ff6b6b]" />
+            </div>
+            <div>
+              <p className="mb-2 text-xl font-semibold text-white">Drop your files here or click to browse</p>
+              <p className="text-sm text-[#8a8aa8]">
+                Supports: Video (MP4, MOV, AVI), PDF, Word (DOC, DOCX)
+              </p>
+            </div>
+          </label>
+        </div>
 
-export default App;
+        {/* Transcript Input */}
+        <div className="mb-6 rounded-xl border-2 border-[#2d2d52] bg-[#252547] p-8 shadow-xl">
+          <h2 className="mb-2 text-xl font-semibold text-white">Paste transcript / notes</h2>
+          <p className="text-sm text-[#8a8aa8] mb-4">Already have a transcript? Paste it here</p>
+          <textarea
+            placeholder="Paste your transcript or rough notes here..."
+            value={transcript}
+            onChange={(e) => setTranscript(e.target.value)}
+            className="w-full min-h-[200px] resize-none rounded-lg border-2 border-[#2d2d52] bg-[#2d2d52] p-3 text-base text-white placeholder:text-[#8a8aa8] focus-visible:border-[#ff6b6b] focus:outline-none"
+          />
+        </div>
+
+        {/* Uploaded Files List */}
+        {files.length > 0 && (
+          <div className="mb-6 rounded-xl border-2 border-[#2d2d52] bg-[#252547] p-6 shadow-xl">
+            <h2 className="mb-4 text-lg font-semibold text-white">Uploaded Files ({files.length})</h2>
+            <div className="space-y-3">
+              {files.map((file) => (
+                <div
+                  key={file.name}
+                  className="flex items-center justify-between rounded-lg border-2 border-[#2d2d52] bg-[#2d2d52] p-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg bg-[#ff6b6b]/20 p-2 text-[#ff6b6b]">{getFileIcon(file.type)}</div>
+                    <div>
+                      <p className="font-medium text-white">{file.name}</p>
+                      <p className="text-sm text-[#8a8aa8]">{formatFileSize(file.size)}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeFile(file.name)}
+                    className="p-2 rounded-lg text-[#8a8aa8] hover:text-[#ff6b6b]"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex gap-4">
+          <button
+            onClick={resetAll}
+            disabled={files.length === 0 && !transcript}
+            className="flex-1 flex items-center justify-center gap-2 rounded-lg border-2 border-[#2d2d52] bg-transparent py-3 text-base font-semibold text-white hover:bg-[#2d2d52] hover:text-[#ff6b6b] disabled:opacity-50"
+          >
+            <Trash2 className="h-5 w-5" /> Reset
+          </button>
+          <button
+            onClick={callBackend}
+            disabled={loading || (files.length === 0 && !transcript)}
+            className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-[#ff6b6b] py-3 text-base font-semibold text-white shadow-lg hover:bg-[#e45a5a] disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Wand2 className="h-5 w-5" />}
+            {loading ? "Generating…" : "Generate"}
+          </button>
+        </div>
+
+        {errorMsg && <div className="text-sm text-red-400 mt-4">{errorMsg}</div>}
+      </div>
+    </main>
+  )
+}
